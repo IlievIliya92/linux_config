@@ -136,5 +136,4 @@ export GEM_HOME="$HOME/gems"
 export PATH="$HOME/gems/bin:$PATH"
 
 # Go
-export GOPATH=$HOME/Go
-export PATH="$PATH:$GOPATH/bin"
+export PATH=$PATH:/usr/local/go/bin
