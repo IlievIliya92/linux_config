@@ -1,0 +1,202 @@
+#!/bin/bash
+
+# --- TERM Colours
+RED=`tput setaf 1`
+GREEN=`tput setaf 2`
+YELLOW=`tput setaf 3`
+BLUE=`tput setaf 4`
+MAGENTA=`tput setaf 5`
+CYAN=`tput setaf 6`
+RESET=`tput sgr0`
+
+# ---
+# Sys funcs
+# ---
+sys_update() {
+    sudo apt-get update
+}
+
+sys_add_repo() {
+    if ! grep -q "$1" /etc/apt/sources.list; then
+        echo "${RED}[-]${RESET} $1 repository not found"
+        sudo add-apt-repository $1
+        sys_update
+    else
+        echo "${GREEN}[+]${RESET} $1 repository found"
+    fi
+}
+
+sys_ask_for_update() {
+    printf "\n Do you want to run system packages update? [y/n]\n"
+
+    while : ; do
+        read -n 1 k <&1
+        if [[ $k = n ]] ; then
+            printf "\n Skipping system update...\n"
+            break
+        elif [[ $k = y ]] ; then
+            printf "\n Updating system packages...\n"
+            sys_update
+            break
+        else
+            printf "\n Skipping system update...\n"
+            break
+        fi
+    done
+}
+
+sys_install_deb_pkg() {
+    sudo apt -y install $1
+}
+
+sys_ask_to_isntall() {
+    while : ; do
+        read -n 1 k <&1
+        if [[ $k = q ]] ; then
+            printf "\n Skipping $2 installation...\n"
+            break
+        elif [[ $k = y ]] ; then
+            printf "\n Instaling the required package $2\n"
+            $1 $2
+            break
+        else
+            printf "\n Skipping $2 installation...\n"
+            break
+        fi
+    done
+}
+
+sys_check_available() {
+    if ! command -v $1 &> /dev/null
+    then
+        echo "${RED}[-]${RESET} $1 not found"
+        return 0
+    fi
+    echo "${GREEN}[+]${RESET} $1 found"
+
+    return 1
+}
+
+# ---
+# Python3
+# ---
+pip3_install_pkg() {
+    pip3 install $1
+}
+
+install_python3_package() {
+    # -- Check if the package is available
+    if python3 -c "import $1"; then
+        echo "${GREEN}[+]${RESET} $1 found"
+        return
+    else
+        echo "${RED}[-]${RESET} $1 not found"
+        printf "\nDo you want to install the python3 package: $1 ? [y/n]\n"
+        sys_ask_to_isntall pip3_install_pkg $1
+    fi
+}
+
+# ---
+# Debian Package Installation
+# ---
+install_deb_package() {
+    dpkg -s $1 &> /dev/null
+
+    if [ $? -eq 0 ]; then
+        echo "${GREEN}[+]${RESET} $1 found"
+    else
+        echo "${RED}[-]${RESET} $1 not found"
+        printf "\nDo you want to install the package: $1 ? [y/n]\n"
+        sys_ask_to_isntall sys_install_deb_pkg $1
+    fi
+}
+
+# ---
+# Languages, toolchains & build utilities
+# ---
+install_go() {
+    sys_check_available go
+
+    if [ $? -eq 0 ]; then
+        wget https://go.dev/dl/go1.18.3.linux-amd64.tar.gz
+        sudo rm -rf /usr/local/go
+        tar -C /usr/local -xzf go1.18.3.linux-amd64.tar.gz
+
+        rm go1.18.3.linux-amd64.tar.gz
+    fi
+
+    go version
+}
+
+install_nodejs() {
+    install_deb_package nodejs
+    install_deb_package npm
+
+    nodejs --version
+}
+
+install_cmake() {
+    dpkg -s cmake &> /dev/null
+
+    if [ $? -eq 0 ]; then
+        echo "${GREEN}[+]${RESET} cmake found"
+    else
+        echo "${RED}[-]${RESET} cmake not found"
+        printf "\nDo you want to install the package: cmake ? [y/n]\n"
+        while : ; do
+            read -n 1 k <&1
+            if [[ $k = q ]] ; then
+                printf "\n Skipping cmake installation...\n"
+                break
+            elif [[ $k = y ]] ; then
+                printf "\n Installing cmake ...\n"
+                sudo apt remove --purge --auto-remove cmake
+                sudo apt update && \
+                sudo apt install -y software-properties-common lsb-release && \
+                sudo apt clean all
+                wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | sudo tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+                sudo apt-add-repository "deb https://apt.kitware.com/ubuntu/ $(lsb_release -cs) main"
+                sudo apt update
+                sudo apt install cmake
+                break
+            else
+                printf "\n Skipping cmake installation...\n"
+                break
+            fi
+        done
+    fi
+
+    cmake --version
+}
+
+utils_install()
+{
+    echo "${MAGENTA}--------------------------------------------------"
+    echo "--------- System Utilities & Tools Setup ---------"
+    echo "--------------------------------------------------"
+    echo "${RESET}"
+
+    echo "${CYAN}Updating Packages ${RESET}"
+    sys_update
+    echo ""
+
+    echo "${CYAN}Installing Networking Utils ${RESET}"
+    install_deb_package wireshark
+    install_deb_package nmap
+    install_deb_package tcpdump
+    echo ""
+
+    echo "${CYAN}Installing Languages, Toolchains & Build Utilities ${RESET}"
+    install_nodejs
+    install_go
+    install_cmake
+    echo ""
+
+    echo "${CYAN}Installing Python3 Packages ${RESET}"
+    install_deb_package python3-pip
+    install_python3_package json
+    echo ""
+}
+
+# --- Script Entry point
+utils_install
